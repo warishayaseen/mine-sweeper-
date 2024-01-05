@@ -1,0 +1,160 @@
+import tkinter as tk
+import random
+import unittest
+
+class Minesweeper:
+    def _init_(self, root, row, col, bomb):
+        self.root = root
+        self.row = row
+        self.col = col
+        self.bomb = bomb
+        self.flags = bomb
+        self.is_game_over = False
+        self.map = ["b" for _ in range(bomb)] + [""] * (row * col - bomb)
+        self.mfield = []
+        self.flag_map = []
+        self.closed = []
+
+        self.setup_ui()
+
+    def setup_ui(self):
+        self.create_top_bar()
+        self.create_game_field()
+        self.create_bottom_bar()
+
+    def create_top_bar(self):
+        fr_tbar = tk.LabelFrame(self.root)
+        fr_tbar.grid(row=0, column=0)
+
+        self.lab_flag = tk.Label(fr_tbar, text="Flags: --")
+        self.lab_flag.grid(row=0, column=0)
+
+    def create_game_field(self):
+        fr_game = tk.LabelFrame(self.root)
+        fr_game.grid(row=1, column=0)
+
+        for i in range(self.row * self.col):
+            button = tk.Button(fr_game, text="   ", command=lambda x=i: self.first_click(x))
+            button.bind('<Button-3>', lambda eff, x=i: self.right_click(event=eff, index=x))
+            button.grid(row=i // self.col, column=i % self.col)
+            self.mfield.append(button)
+
+    def create_bottom_bar(self):
+        fr_dbar = tk.LabelFrame(self.root)
+        fr_dbar.grid(row=2, column=0)
+
+        self.lab_over = tk.Label(fr_dbar, text="")
+        self.lab_over.pack()
+
+    def click(self, index):
+        if index in self.closed or self.is_game_over or index in self.flag_map:
+            return
+        if self.map[index] == "b":
+            self.lab_over.config(text="Game Over! You lost")
+            self.game_over()
+            return
+        self.stack = [index]
+        while self.stack:
+            cl_ind = self.stack[-1]
+            cl_exam = self.examine(cl_ind)
+            self.closed.append(cl_ind)
+            self.stack.pop()
+            if cl_exam == 0:
+                for i in self.surrounding(cl_ind):
+                    if i not in self.closed and i not in self.stack:
+                        self.stack.append(i)
+                self.mfield[cl_ind].config(bg="grey")
+            else:
+                self.mfield[cl_ind].config(text=str(cl_exam))
+        for i in self.flag_map:
+            if i in self.closed:
+                self.mfield[i].config(text="   ", fg="black")
+                self.flags += 1
+                self.flag_map.remove(i)
+        self.lab_flag.config(text="Flags: " + str(self.flags))
+        if len(self.closed) == self.row * self.col - self.bomb:
+            self.lab_over.config(text="You Won!")
+            self.game_over()
+
+    def surrounding(self, index):
+        tst = []
+        for c in [-self.col, 0, self.col]:
+            if index + c < 0 or index + c >= self.row * self.col:
+                continue
+            for i in [-1, 0, 1]:
+                if index // self.col != (index + i) // self.col:
+                    continue
+                tst.append(index + c + i)
+        tst.remove(index)
+        return tst
+
+    def examine(self, index):
+        tot = 0
+        for i in self.surrounding(index):
+            if self.map[i] == "b":
+                tot += 1
+        return tot
+
+    def first_click(self, index):
+        self.map = ["b" for _ in range(self.bomb)] + [""] * (self.row * self.col - self.bomb)
+        random.shuffle(self.map)
+        while self.map[index] == "b":
+            random.shuffle(self.map)
+
+        for i in range(self.row * self.col):
+            self.mfield[i].config(command=lambda x=i: self.click(x))
+        self.lab_flag.config(text="Flags: " + str(self.flags))
+        self.click(index)
+
+    def game_over(self):
+        self.is_game_over = True
+        for i in range(self.row * self.col):
+            if self.map[i] == "b":
+                self.mfield[i].config(text="B", fg="red")
+
+    def right_click(self, event, index):
+        if index in self.closed or self.is_game_over:
+            return
+        if index in self.flag_map:
+            self.mfield[index].config(text="   ", fg="black")
+            self.flags += 1
+            self.flag_map.remove(index)
+        elif self.flags > 0:
+            self.mfield[index].config(text=" ! ", fg="blue")
+            self.flags -= 1
+            self.flag_map.append(index)
+        self.lab_flag.config(text="Flags: " + str(self.flags))
+
+
+class TestMinesweeper(unittest.TestCase):
+    def test_initialize_game(self):
+        root = tk.Tk()
+        game = Minesweeper(root, row=10, col=10, bomb=10)
+        self.assertEqual(len(game.mfield), 100)
+        self.assertEqual(game.flags, 10)
+        self.assertEqual(game.is_game_over, False)
+
+    def test_click_on_tile(self):
+        root = tk.Tk()
+        game = Minesweeper(root, row=10, col=10, bomb=10)
+        game.click(0)
+        self.assertNotEqual(game.closed, [])
+        self.assertNotEqual(game.flag_map, [])
+        self.assertNotEqual(game.flags, 10)
+
+    def test_right_click_on_tile(self):
+        root = tk.Tk()
+        game = Minesweeper(root, row=10, col=10, bomb=10)
+        game.right_click(event=None, index=0)
+        self.assertNotEqual(game.flag_map, [])
+        self.assertNotEqual(game.flags, 10)
+
+    def test_game_over(self):
+        root = tk.Tk()
+        game = Minesweeper(root, row=10, col=10, bomb=10)
+        game.game_over()
+        self.assertEqual(game.is_game_over, True)
+        self.assertEqual(game.lab_over.cget("text"), "")
+
+if _name_ == "_main_":
+    unittest.main()
